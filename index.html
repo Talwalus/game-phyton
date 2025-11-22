@@ -235,6 +235,12 @@ def check(ev):
         update_range_display()
 
 document["check"].bind("click", check)
+# mark as bound so JS fallback won't double-bind
+try:
+    document['check'].attrs['data-brython'] = '1'
+    document['guess'].attrs['data-brython'] = '1'
+except Exception:
+    pass
 
 # Allow pressing Enter in the input to submit the guess
 def on_keydown(ev):
@@ -247,6 +253,61 @@ def on_keydown(ev):
 document["guess"].bind("keydown", on_keydown)
 
 update_range_display()
+try:
+    window.__game_check = check
+except Exception:
+    pass
+</script>
+
+<!-- JS fallback: if Brython didn't initialize, bind a simple JS handler so the UI still works -->
+<script>
+// remove disabled attribute if present
+document.addEventListener('DOMContentLoaded', function(){
+    var btn = document.getElementById('check');
+    if (btn && btn.hasAttribute('disabled')) btn.removeAttribute('disabled');
+
+    // Always attach a small handler that calls the Brython check if present,
+    // otherwise runs a simple JS fallback. This avoids missing clicks.
+    var bestEl = document.getElementById('best');
+    var attemptsEl = document.getElementById('attempts');
+    var msg = document.getElementById('message');
+    var rangeEl = document.getElementById('range');
+    var jsAttempts = 0;
+    var jsMin = 1, jsMax = 100, jsSecret = Math.floor(Math.random()*100)+1;
+
+    function jsUpdateRange(){ if (rangeEl) rangeEl.textContent = jsMin + ' - ' + jsMax; }
+    jsUpdateRange();
+
+    function jsDoCheck(){
+        var val = document.getElementById('guess').value;
+        if (!val || String(val).trim() === ''){ if (msg) msg.textContent = 'Enter a number!'; return; }
+        var guess = parseInt(parseFloat(val));
+        if (isNaN(guess)){ if (msg) msg.textContent = 'Invalid number!'; return; }
+        jsAttempts += 1; if (attemptsEl) attemptsEl.textContent = jsAttempts;
+        if (guess < jsMin || guess > jsMax){ if (msg) msg.textContent = 'Out of current range! ' + jsMin + ' - ' + jsMax; return; }
+        if (guess < jsSecret){ if (msg) msg.textContent = 'Too low! 📉'; jsMin = Math.max(jsMin, guess+1); jsUpdateRange(); }
+        else if (guess > jsSecret){ if (msg) msg.textContent = 'Too high! 📈'; jsMax = Math.min(jsMax, guess-1); jsUpdateRange(); }
+        else { if (msg) msg.textContent = 'Correct! You win! 🎉💙 The number was ' + jsSecret + '. Attempts: ' + jsAttempts + '.';
+                     try{ var b = localStorage.getItem('best'); b = b?parseInt(b):null; if (!b || jsAttempts < b){ localStorage.setItem('best', String(jsAttempts)); if (bestEl) bestEl.textContent = String(jsAttempts); } }catch(e){}
+                     jsSecret = Math.floor(Math.random()*100)+1; jsAttempts = 0; if (attemptsEl) attemptsEl.textContent = '0'; jsMin = 1; jsMax = 100; jsUpdateRange(); }
+    }
+
+    function clickHandler(e){
+        // prefer Brython-exported function if present
+        try{
+            if (window.__game_check){
+                // Brython function may expect an event; call it
+                try{ window.__game_check(e); return; } catch(err){}
+            }
+        }catch(err){}
+        // fallback to JS
+        jsDoCheck();
+    }
+
+    if (btn) btn.addEventListener('click', clickHandler);
+    var input = document.getElementById('guess');
+    if (input) input.addEventListener('keydown', function(ev){ if (ev.key === 'Enter') clickHandler(ev); });
+});
 </script>
 
 </body>
