@@ -23,6 +23,13 @@ http://localhost:8000
 
 Note: Some browsers block audio autoplay until the page receives user interaction. If you don't hear sounds, click anywhere on the page or press the Guess button once to enable audio playback.
 
+## Assets and Audio (local)
+
+- The project now includes a local SVG at `assets/miku.svg` so the site does not depend on remote images.
+- Audio is synthesized in-browser using the WebAudio API (implemented in the Brython code). There are no external audio files required.
+
+This means the site is self-contained and will work offline once served from your machine or a static host.
+
 ## Quick tests
 
 - Leave the input blank and click `Guess` → message should say `Enter a number!`.
