@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Miku Python Guessing Game</title>
+<script src="https://cdn.jsdelivr.net/npm/brython@3.9.5/brython.min.js"></script>
+
+<style>
+    body {
+        margin: 0;
+        font-family: "Poppins", sans-serif;
+        background: linear-gradient(135deg, #39c5bb, #71d9f5);
+        color: #fff;
+    }
+    .container {
+        max-width: 500px;
+        margin: 80px auto;
+        padding: 30px;
+        background: rgba(0,0,0,0.25);
+        border-radius: 15px;
+        text-align: center;
+        backdrop-filter: blur(6px);
+        box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+    }
+    input {
+        width: 80%;
+        padding: 12px;
+        border-radius: 10px;
+        border: 2px solid #39c5bb;
+        font-size: 18px;
+        margin-bottom: 20px;
+    }
+    button {
+        padding: 12px 30px;
+        background: #39c5bb;
+        border: none;
+        border-radius: 10px;
+        font-size: 18px;
+        color: #fff;
+        cursor: pointer;
+    }
+    .msg {
+        margin-top: 20px;
+        font-size: 22px;
+        min-height: 40px;
+    }
+    .miku-img {
+        width: 220px;
+        margin-top: 20px;
+        filter: drop-shadow(0 0 10px #fff);
+    }
+</style>
+</head>
+
+<body onload="brython()">
+
+<div class="container">
+    <h1>🎤 Hatsune Miku Python Guessing Game 🎶</h1>
+    
+    <input id="guess" type="number" placeholder="Enter your guess…">
+    <br>
+    <button id="check">Guess</button>
+
+    <div style="margin-top:12px;">
+        <strong>Attempts:</strong> <span id="attempts">0</span>
+        &nbsp;&nbsp; <strong>Best:</strong> <span id="best">-</span>
+    </div>
+
+    <div class="msg" id="message"></div>
+    <div style="margin-top:8px; font-size:16px; opacity:0.95;">Range: <span id="range">1 - 100</span></div>
+
+    <img src="https://i.imgur.com/kYIvG2l.png" class="miku-img" alt="Miku">
+</div>
+
+<!-- 🎵 Online voice files -->
+<audio id="voice_low" src="https://files.catbox.moe/0owj0t.mp3"></audio>
+<audio id="voice_high" src="https://files.catbox.moe/klj6ug.mp3"></audio>
+<audio id="voice_correct" src="https://files.catbox.moe/vi7hcm.mp3"></audio>
+
+<script type="text/python">
+from browser import document, window
+import random
+
+secret = random.randint(1, 100)
+attempts = 0
+min_range = 1
+max_range = 100
+
+def load_best():
+    try:
+        b = window.localStorage.getItem('best')
+        return int(b) if b is not None else None
+    except Exception:
+        return None
+
+def save_best(value):
+    try:
+        window.localStorage.setItem('best', str(value))
+    except Exception:
+        pass
+
+best = load_best()
+if best is not None:
+    document['best'].text = str(best)
+
+def update_range_display():
+    document['range'].text = f"{min_range} - {max_range}"
+
+def enable_guess_button():
+    try:
+        if 'disabled' in document['check'].attrs:
+            del document['check'].attrs['disabled']
+    except Exception:
+        pass
+
+def disable_guess_button():
+    try:
+        document['check'].attrs['disabled'] = 'disabled'
+    except Exception:
+        pass
+
+def play(sound_id):
+    try:
+        el = document[sound_id]
+        disable_guess_button()
+        try:
+            el.play()
+        except Exception:
+            try:
+                el.elt.play()
+            except Exception:
+                enable_guess_button()
+                return
+
+        # Re-enable when audio ends
+        def on_end(ev):
+            try:
+                enable_guess_button()
+                el.unbind('ended', on_end)
+            except Exception:
+                enable_guess_button()
+
+        try:
+            el.bind('ended', on_end)
+        except Exception:
+            # Fallback: re-enable after 1s
+            from browser import timer
+            timer.set_timeout(enable_guess_button, 1000)
+    except Exception:
+        enable_guess_button()
+        pass
+
+def check(ev):
+    global secret, attempts, min_range, max_range, best
+    msg = document["message"]
+    guess_value = document["guess"].value
+
+    if guess_value is None or str(guess_value).strip() == "":
+        msg.text = "Enter a number!"
+        return
+
+    # Accept numeric input (including floats) but convert to int
+    try:
+        guess = int(float(guess_value))
+    except Exception:
+        msg.text = "Invalid number!"
+        return
+
+    # Update attempts
+    attempts += 1
+    document['attempts'].text = str(attempts)
+
+    if guess < min_range or guess > max_range:
+        msg.text = f"Out of current range! {min_range} - {max_range}"
+        return
+
+    if guess < secret:
+        msg.text = "Too low! 📉"
+        # narrow range
+        if guess + 1 > min_range:
+            min_range = max(min_range, guess + 1)
+        update_range_display()
+        play("voice_low")
+
+    elif guess > secret:
+        msg.text = "Too high! 📈"
+        if guess - 1 < max_range:
+            max_range = min(max_range, guess - 1)
+        update_range_display()
+        play("voice_high")
+
+    else:
+        msg.text = f"Correct! You win! 🎉💙 The number was {secret}. Attempts: {attempts}."
+        play("voice_correct")
+        # Update best score
+        if best is None or attempts < best:
+            best = attempts
+            document['best'].text = str(best)
+            save_best(best)
+
+        # reset game
+        secret = random.randint(1, 100)
+        attempts = 0
+        min_range = 1
+        max_range = 100
+        document['attempts'].text = '0'
+        update_range_display()
+
+document["check"].bind("click", check)
+
+# Allow pressing Enter in the input to submit the guess
+def on_keydown(ev):
+    try:
+        if getattr(ev, 'keyCode', None) == 13 or getattr(ev, 'key', None) == 'Enter':
+            check(ev)
+    except Exception:
+        pass
+
+document["guess"].bind("keydown", on_keydown)
+
+update_range_display()
+</script>
+
+</body>
+</html>
