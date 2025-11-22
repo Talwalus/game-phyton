@@ -69,13 +69,10 @@
     <div class="msg" id="message"></div>
     <div style="margin-top:8px; font-size:16px; opacity:0.95;">Range: <span id="range">1 - 100</span></div>
 
-    <img src="https://i.imgur.com/kYIvG2l.png" class="miku-img" alt="Miku">
+    <img src="assets/miku.svg" class="miku-img" alt="Miku">
 </div>
 
-<!-- 🎵 Online voice files -->
-<audio id="voice_low" src="https://files.catbox.moe/0owj0t.mp3"></audio>
-<audio id="voice_high" src="https://files.catbox.moe/klj6ug.mp3"></audio>
-<audio id="voice_correct" src="https://files.catbox.moe/vi7hcm.mp3"></audio>
+<!-- Audio is synthesized locally with WebAudio; external files removed -->
 
 <script type="text/python">
 from browser import document, window
@@ -120,35 +117,66 @@ def disable_guess_button():
         pass
 
 def play(sound_id):
+    # Synthesize simple tones using the WebAudio API (no external files)
     try:
-        el = document[sound_id]
+        try:
+            ctx = window.AudioContext()
+        except Exception:
+            try:
+                ctx = window.webkitAudioContext()
+            except Exception:
+                ctx = None
+
+        if ctx is None:
+            return
+
         disable_guess_button()
-        try:
-            el.play()
-        except Exception:
-            try:
-                el.elt.play()
-            except Exception:
-                enable_guess_button()
-                return
 
-        # Re-enable when audio ends
-        def on_end(ev):
+        def tone(freq, duration_ms, volume=0.12):
+            osc = ctx.createOscillator()
+            gain = ctx.createGain()
+            osc.type = 'sine'
+            osc.frequency.value = freq
+            gain.gain.value = volume
+            osc.connect(gain)
+            gain.connect(ctx.destination)
             try:
-                enable_guess_button()
-                el.unbind('ended', on_end)
+                osc.start()
             except Exception:
-                enable_guess_button()
+                pass
 
-        try:
-            el.bind('ended', on_end)
-        except Exception:
-            # Fallback: re-enable after 1s
             from browser import timer
-            timer.set_timeout(enable_guess_button, 1000)
+            def stop_osc():
+                try:
+                    osc.stop()
+                except Exception:
+                    pass
+                try:
+                    enable_guess_button()
+                except Exception:
+                    pass
+
+            timer.set_timeout(stop_osc, duration_ms)
+
+        # Map IDs to tones or short melodies
+        if sound_id == 'voice_low':
+            tone(220, 450)
+        elif sound_id == 'voice_high':
+            tone(880, 350)
+        elif sound_id == 'voice_correct':
+            # short success melody
+            tone(660, 150)
+            from browser import timer
+            timer.set_timeout(lambda: tone(880, 200, 0.09), 160)
+            timer.set_timeout(lambda: tone(1040, 260, 0.08), 380)
+        else:
+            tone(440, 200)
+
     except Exception:
-        enable_guess_button()
-        pass
+        try:
+            enable_guess_button()
+        except Exception:
+            pass
 
 def check(ev):
     global secret, attempts, min_range, max_range, best
